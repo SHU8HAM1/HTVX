@@ -12,7 +12,7 @@ def get_video_data():
 
         # store video in cloud storage
         # connect storage bucket to Snowflake
-    return "<p>Hello, World!</p>"
+    return "<p>Hello, World</p>"
 
 if __name__ == '__main__':
     app.run(debug=True)
