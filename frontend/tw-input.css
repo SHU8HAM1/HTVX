@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* You can add custom layers below if needed */
+@layer base {
+  html, body { @apply w-[400px] h-[110px] m-0 p-0 bg-transparent text-[13px] text-neutral-200 font-sans overflow-hidden flex items-center justify-center; }
+}
