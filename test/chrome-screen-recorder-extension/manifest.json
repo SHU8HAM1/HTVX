@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Chrome Screen Recorder",
+  "version": "1.0",
+  "description": "Record current tab.",
+  "permissions": [
+    "tabCapture",
+    "activeTab",
+    "offscreen",
+    "downloads"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["styles.css","offscreen.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
