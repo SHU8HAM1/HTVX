@@ -1,0 +1,20 @@
+{
+  "name": "extension-popup",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "tailwind:build": "tailwindcss -i ./tw-input.css -o ./build/popup.css --minify",
+    "tailwind:watch": "tailwindcss -i ./tw-input.css -o ./build/popup.css --watch",
+    "build:js": "esbuild src/main.jsx --bundle --format=esm --outfile=build/popup.js --define:process.env.NODE_ENV=\"production\"",
+    "build": "npm run tailwind:build && npm run build:js"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.14",
+    "postcss": "^8.4.47",
+    "autoprefixer": "^10.4.20",
+    "esbuild": "^0.23.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
