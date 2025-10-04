@@ -44,11 +44,13 @@
       if (isRecording) return;
       try {
         console.log('[RecorderOverlay] start requested');
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true, preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'include' });
         chunks = [];
         mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
         mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size) chunks.push(e.data);
+          if (e.data && e.data.size) {
+            chunks.push(e.data);
+          }
         };
         mediaRecorder.onstop = handleStop;
         mediaRecorder.start();
