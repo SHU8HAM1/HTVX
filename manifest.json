@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Simple Extension",
+  "version": "1.0",
+  "description": "A simple, minimalistic extension",
+  "action": {
+    "default_popup": "frontend/index.html",
+    "default_icon": "frontend/images/image.png"
+  },
+  "permissions": []
+}
