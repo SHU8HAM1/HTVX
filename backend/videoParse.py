@@ -21,9 +21,9 @@ def upload_chunk():
     filename = f"{UPLOAD_FOLDER}/chunk_{timestamp}.webm"
     file.save(filename)
 
-    handle_chunk(file)
+    prompt_text = handle_chunk(file)
 
-    return {'status': 'ok'}
+    return {'status': 'ok', 'prompt': prompt_text}
 
 def upload_to_azure(file_bytes, file_name):
     ACCOUNT_NAME = "Account_Name"

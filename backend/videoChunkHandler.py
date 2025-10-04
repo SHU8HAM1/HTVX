@@ -6,11 +6,26 @@ from dotenv import load_dotenv
 # loads env vars
 load_dotenv()
 model = genai.GenerativeModel("gemini-1.5-flash")
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY")) # configure api key
+
+UPLOAD_FOLDER = 'tmp_chunks'
+
+def handle_chunk(video_file):
+    audio_path = video_to_audio(video_file)
+    transcription = model.generate_content(
+        contents=[
+            "Transcribe this audio into text:",
+            {"audio": open(audio_path, "rb")}
+        ]
+    )
+    text_data = transcription.text
+
+    response = model.generate_content(f"Generate a prompt to ask a model to generate a video based on this information: {text_data}")
+    return response.text
 
 def video_to_audio(video_path, output_folder='audio_chunks'):
     os.makedirs(output_folder, exist_ok=True)
-    # Create output file name
+    
     base_name = os.path.splitext(os.path.basename(video_path))[0]
     audio_path = os.path.join(output_folder, f"{base_name}.wav")
     
@@ -27,21 +42,6 @@ def video_to_audio(video_path, output_folder='audio_chunks'):
     
     subprocess.run(command, check=True)
     return audio_path
-
-# Example usage
-video_file = 'temp_chunks/chunk_20251004163000.webm'
-audio_file = video_to_audio(video_file)
-UPLOAD_FOLDER = 'tmp_chunks'
-
-def handle_chunk(video_file):
-    audio_path = video_to_audio(video_file)
-    audio_file = client.files.upload(file=audio_path)
-
-
-    response = model.generate_content("Generate a prompt to ask a model to generate a video based on this information: {data}")
-    # placeholder: real implementation would call your AI service asynchronously
-    return response
-
 
 def finalize_recording(session_id):
     """
