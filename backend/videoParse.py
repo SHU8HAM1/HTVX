@@ -1,4 +1,5 @@
 from flask import Flask, request
+#from azure.storage.blob import BlobServiceClient
 
 app = Flask(__name__)
 
@@ -12,7 +13,14 @@ def get_video_data():
 
         # store video in cloud storage
         # connect storage bucket to Snowflake
-    return "<p>Hello, World! </p>"
+    return "<p>Hello, World!</p>"
+
+def upload_to_azure(file_bytes, file_name):
+    # change account name and key
+    connect_str = "DefaultEndpointsProtocol=https;AccountName=MY_ACCOUNT;AccountKey=MY_KEY;EndpointSuffix=core.windows.net"
+    container_name = "videos"
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
