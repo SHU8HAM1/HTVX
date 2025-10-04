@@ -146,7 +146,7 @@
         #recording-strip-overlay button.stop:hover { background:linear-gradient(135deg,#ff6666,#d32121); }
         #recording-strip-overlay button.hide { background:rgba(120,120,140,0.25); color:#fff; font-weight:500; }
         #recording-strip-overlay button.hide:hover { background:rgba(140,140,160,0.35); }
-        #recording-strip-overlay .drag { width:12px; height:28px; border-radius:6px; background:rgba(120,120,140,0.35); display:flex; align-items:center; justify-content:center; position:relative; }
+        #recording-strip-overlay .drag { width:60px; height:28px; border-radius:6px; background:rgba(120,120,140,0.35); display:flex; align-items:center; justify-content:center; cursor:grab; position:relative; }
         #recording-strip-overlay .drag:before, #recording-strip-overlay .drag:after { content:''; position:absolute; width:2px; height:60%; background:rgba(255,255,255,0.55); border-radius:2px; }
         #recording-strip-overlay .drag:before { left:4px; }
         #recording-strip-overlay .drag:after { right:4px; }
@@ -162,7 +162,7 @@
       const strip = document.createElement('div');
       strip.id = 'recording-strip-overlay';
       strip.innerHTML = `
-        <div class="drag" title="Drag"></div>
+        <div class="drag w-[100px]" title="Drag">Drag</div>
         <span class="rec-dot" title="Idle"></span>
         <span class="label">Recorder Idle</span>
         <button class="start" type="button">Start</button>
@@ -174,7 +174,7 @@
     }
 
     function enableDrag(container, handle) {
-      let dragging = false;
+      let dragging = true;
       let ox = 0;
       let oy = 0;
       handle.addEventListener('mousedown', (e) => {
