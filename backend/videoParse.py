@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask
 from flask_socketio import SocketIO, emit
 from azure.storage.blob import BlobServiceClient
 from datetime import datetime
