@@ -11,27 +11,6 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio.init_app(app)
 
-# store the latest uploaded video URL in memory (simple approach for dev)
-latest_video_url = None
-
-@app.route('/notify', methods=['POST'])
-def notify():
-    global latest_video_url
-    data = request.get_json(force=True)
-    url = data.get('url') if isinstance(data, dict) else None
-    if not url:
-        return ({'ok': False, 'message': 'missing url'}, 400)
-    latest_video_url = url
-    try:
-        socketio.emit('video_uploaded', {'url': url})
-    except Exception as e:
-        print('socketio emit error in /notify:', e)
-    return ({'ok': True}, 200)
-
-@app.route('/latest_video', methods=['GET'])
-def get_latest_video():
-    return ({'url': latest_video_url}, 200)
-
 UPLOAD_FOLDER = 'video_chunks'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
