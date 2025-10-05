@@ -42,13 +42,3 @@ def video_to_audio(video_path, output_folder='audio_chunks'):
     
     subprocess.run(command, check=True)
     return audio_path
-
-def finalize_recording(session_id):
-    """
-    1. Merge stored chunks into a final video file.
-    2. Combine partial prompts into a single final prompt.
-    3. Generate the final video using your model.
-    4. Upload to Azure Blob and return the file URL.
-    """
-    final_video_url = f"https://azure.blob.core.windows.net/videos/{session_id}.mp4"
-    return final_video_url
