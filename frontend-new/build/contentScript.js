@@ -43,34 +43,99 @@
       }
     }
 
-    async function start() {
-      if (isRecording) return;
-      try {
-        console.log('[RecorderOverlay] start requested');
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true, preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'include' });
-        chunks = [];
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size) {
-            chunks.push(e.data);
-            try {
-              // forward chunk to extension background for upload
-              chrome.runtime.sendMessage({ type: 'UPLOAD_CHUNK', chunk: e.data });
-            } catch (er) {
-              // ignore if messaging unavailable
-            }
+  async function start() {
+  if (isRecording) {
+    console.log('[RecorderOverlay] already recording, ignoring start');
+    return;
+  }
+  
+  try {
+    console.log('[RecorderOverlay] start requested');
+    console.log('[RecorderOverlay] requesting getDisplayMedia...');
+    
+    stream = await navigator.mediaDevices.getDisplayMedia({ 
+      video: true, 
+      audio: true, 
+      preferCurrentTab: true, 
+      selfBrowserSurface: 'include', 
+      surfaceSwitching: 'include' 
+    });
+    
+    console.log('[RecorderOverlay] got stream:', stream);
+    console.log('[RecorderOverlay] stream tracks:', stream.getTracks());
+    
+    chunks = [];
+    
+    console.log('[RecorderOverlay] creating MediaRecorder...');
+    mediaRecorder = new MediaRecorder(stream, { 
+      mimeType: 'video/webm;codecs=vp9,opus' 
+    });
+    
+    console.log('[RecorderOverlay] MediaRecorder created, state:', mediaRecorder.state);
+    
+    // Event handlers
+   mediaRecorder.ondataavailable = async (e) => {
+  console.log('[RecorderOverlay] ondataavailable fired! data:', e.data, 'size:', e.data?.size);
+  
+  if (e.data && e.data.size > 0) {
+    chunks.push(e.data);
+    
+    try {
+      const arrayBuffer = await e.data.arrayBuffer();
+      console.log('[RecorderOverlay] Converted to ArrayBuffer, size:', arrayBuffer.byteLength);
+      
+      // FIX: Convert ArrayBuffer to Uint8Array (this preserves data through Chrome messaging)
+      const uint8Array = new Uint8Array(arrayBuffer);
+      console.log('[RecorderOverlay] Converted to Uint8Array, length:', uint8Array.length);
+      
+      chrome.runtime.sendMessage(
+        { 
+          type: 'UPLOAD_CHUNK', 
+          chunk: Array.from(uint8Array)  // Convert to regular array
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('[RecorderOverlay] Error sending chunk:', chrome.runtime.lastError);
+          } else {
+            console.log('[RecorderOverlay] Chunk sent successfully:', response);
           }
-        };
-        mediaRecorder.onstop = handleStop;
-        mediaRecorder.start();
-        isRecording = true;
-        setRecording(true);
-      } catch (e) {
-        console.warn('[RecorderOverlay] Start failed', e);
-        strip.style.outline = '2px solid red';
-        label.textContent = 'Start failed: ' + (e.message || e);
-      }
+        }
+      );
+    } catch (err) {
+      console.error('[RecorderOverlay] Failed to process chunk:', err);
     }
+  } else {
+    console.warn('[RecorderOverlay] ondataavailable but size is 0 or no data');
+  }
+};
+    
+    mediaRecorder.onstart = () => {
+      console.log('[RecorderOverlay] MediaRecorder.onstart fired - recording is active');
+    };
+    
+    mediaRecorder.onerror = (e) => {
+      console.error('[RecorderOverlay] MediaRecorder.onerror:', e);
+    };
+    
+    mediaRecorder.onstop = handleStop;
+    
+    console.log('[RecorderOverlay] calling mediaRecorder.start(1000)...');
+    mediaRecorder.start(1000);
+    console.log('[RecorderOverlay] mediaRecorder.start() called, new state:', mediaRecorder.state);
+    
+    isRecording = true;
+    setRecording(true);
+    
+    console.log('[RecorderOverlay] start() complete successfully');
+    
+  } catch (e) {
+    console.error('[RecorderOverlay] Start failed with error:', e);
+    console.error('[RecorderOverlay] Error name:', e.name);
+    console.error('[RecorderOverlay] Error message:', e.message);
+    strip.style.outline = '2px solid red';
+    label.textContent = 'Start failed: ' + (e.message || e);
+  }
+}
 
     function stop() {
       if (mediaRecorder && isRecording) mediaRecorder.stop();

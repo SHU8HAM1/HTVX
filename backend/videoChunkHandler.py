@@ -14,25 +14,47 @@ current_prompt = "We test the linear algebra theory today."
 
 UPLOAD_FOLDER = 'tmp_chunks'
 
-def handle_chunk(video_file):
-    audio_path = video_to_audio(video_file)
-    transcription = model.generate_content(
-        contents=[
-            "Transcribe this audio into text:",
-            {"audio": open(audio_path, "rb")}
-        ]
-    )
-    text_data = transcription.text
+# def handle_chunk(video_file):
+#     print("video-file", video_file)
+#     audio_path = video_to_audio(video_file)
+#     transcription = model.generate_content(
+#         contents=[
+#             "Transcribe this audio into text:",
+#             {"audio": open(audio_path, "rb")}
+#         ]
+#     )
+#     text_data = transcription.text
 
-    response = model.generate_content(f"Generate a prompt to ask a model to generate a video based on this information: {text_data}")
-    return response.text
+#     response = model.generate_content(f"Generate a prompt to ask a model to generate a video based on this information: {text_data}")
+#     return response.text
+
+def handle_chunk(video_file):
+    print("video-file", video_file)
+    
+    try:
+        # Use Gemini to transcribe video directly (no ffmpeg needed)
+        transcription = model.generate_content(
+            contents=[
+                "Transcribe this video into text:",
+                {"mime_type": "video/webm", "data": open(video_file, "rb").read()}
+            ]
+        )
+        text_data = transcription.text
+        print(f"Transcribed: {text_data[:100]}...")
+        
+        response = model.generate_content(f"Generate a prompt to ask a model to generate a video based on this information: {text_data}")
+        return response.text
+        
+    except Exception as e:
+        print(f"Transcription error: {e}")
+        return "Transcription temporarily unavailable"
 
 def video_to_audio(video_path, output_folder='audio_chunks'):
     os.makedirs(output_folder, exist_ok=True)
     
     base_name = os.path.splitext(os.path.basename(video_path))[0]
     audio_path = os.path.join(output_folder, f"{base_name}.wav")
-    
+    print("audio-path",audio_path)
     # command to convert video to audio
     command = [ # ffmpeg -y -i base_name.webm -ar 16000 -ac 1 -vn base_name.wav
         'ffmpeg',

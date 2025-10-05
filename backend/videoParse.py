@@ -1,102 +1,77 @@
-from flask import Flask, request
-from flask_socketio import SocketIO, emit
-from socketio_instance import socketio
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 from datetime import datetime
 import os
 from videoChunkHandler import handle_chunk
 
-
-
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
-socketio.init_app(app)
+
+# Enable CORS for Chrome extension
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 UPLOAD_FOLDER = 'video_chunks'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-
-
-# get video link from frontend 
-@socketio.on('upload_chunk')
-def upload_chunk(data):
+@app.route('/upload_chunk', methods=['POST', 'OPTIONS'])
+def upload_chunk():
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        return '', 200
+    
     try:
-        # data may arrive as raw bytes, bytearray, memoryview, a list of ints,
-        # or a dict containing the binary in a field (e.g. {'data': ...}).
-        payload = None
-        if isinstance(data, dict) and 'data' in data:
-            payload = data['data']
-        else:
-            payload = data
-
-        # Normalize common binary-like containers to bytes
-        if isinstance(payload, memoryview):
-            payload = payload.tobytes()
-        elif isinstance(payload, bytearray):
-            payload = bytes(payload)
-        elif isinstance(payload, list):
-            # list of integers
-            try:
-                payload = bytes(payload)
-            except Exception:
-                # fallback to string representation
-                payload = str(payload).encode('utf-8')
-
-        # If it's a string, attempt base64 decode, otherwise encode
-        if isinstance(payload, str):
-            try:
-                import base64
-                payload = base64.b64decode(payload)
-            except Exception:
-                payload = payload.encode('utf-8')
-
-        if not isinstance(payload, (bytes, bytearray)):
-            # final fallback
-            payload = str(payload).encode('utf-8')
-
-        print(f'Received chunk payload: type={type(payload).__name__} size={len(payload)}')
-
+        # Get raw binary data from request body
+        payload = request.data
+        
+        if not payload:
+            return jsonify({'status': 'error', 'error': 'No data received'}), 400
+        
+        print(f'Received chunk: size={len(payload)} bytes')
+        
+        # Save chunk with timestamp
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
-        filename = f"{UPLOAD_FOLDER}/chunk_{timestamp}.webm"
+        filename = f"chunk_{timestamp}.webm"
         filepath = os.path.join(UPLOAD_FOLDER, filename)
-
+        
         with open(filepath, 'wb') as f:
             f.write(payload)
-
-        # Acknowledge immediately that the chunk was saved so extension can show progress
+        
+        print(f'Saved chunk to: {filepath}')
+        
+        # Process chunk (transcription, etc.)
         try:
-            emit('chunk_saved', {'filename': filename, 'size': len(payload), 'timestamp': timestamp})
-        except Exception:
-            pass
+            prompt_text = handle_chunk(filepath)
+            print(f'Processed chunk, prompt: {prompt_text[:100]}...' if prompt_text else 'Processed chunk')
+        except Exception as e:
+            print(f'Warning: handle_chunk failed: {e}')
+            prompt_text = None
+        
+        return jsonify({
+            'status': 'ok',
+            'filename': filename,
+            'size': len(payload),
+            'timestamp': timestamp,
+            'prompt': prompt_text
+        })
+    
+    except Exception as e:
+        print(f'Error in upload_chunk: {e}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'error': str(e)}), 500
 
-        prompt_text = handle_chunk(filepath)
-
-        emit('chunk_processed', {'status': 'ok', 'prompt': prompt_text})
-    except Exception as exc:
-        print('upload_chunk handler error:', exc)
-        try:
-            emit('chunk_processed', {'status': 'error', 'error': str(exc)})
-        except Exception:
-            pass
-
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok', 'message': 'Server is running'})
 
 if __name__ == '__main__':
-    # Run the Socket.IO server for local development
     port = int(os.environ.get('PORT', 5000))
     print(f'Starting server on port {port}...')
-    # socketio.run will pick up the app via the shared instance
-    # also log connect/disconnect events for diagnostics
-    @socketio.on('connect')
-    def on_connect():
-        try:
-            print('Socket.IO client connected:', request.sid)
-        except Exception:
-            print('Socket.IO client connected (sid unknown)')
-
-    @socketio.on('disconnect')
-    def on_disconnect():
-        try:
-            print('Socket.IO client disconnected:', request.sid)
-        except Exception:
-            print('Socket.IO client disconnected')
-
-    socketio.run(app, host='0.0.0.0', port=port)
+    print(f'Upload folder: {os.path.abspath(UPLOAD_FOLDER)}')
+    app.run(host='0.0.0.0', port=port, debug=True)

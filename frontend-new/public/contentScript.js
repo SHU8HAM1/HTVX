@@ -43,34 +43,71 @@
       }
     }
 
-    async function start() {
-      if (isRecording) return;
-      try {
-        console.log('[RecorderOverlay] start requested');
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true, preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'include' });
-        chunks = [];
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' });
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size) {
-            chunks.push(e.data);
-            try {
-              // forward chunk to extension background for upload
-              chrome.runtime.sendMessage({ type: 'UPLOAD_CHUNK', chunk: e.data });
-            } catch (er) {
-              // ignore if messaging unavailable
+    // Complete updated start() function for your contentScript.js
+// Replace your existing start() function with this:
+
+async function start() {
+  if (isRecording) return;
+  try {
+    console.log('[RecorderOverlay] start requested');
+    stream = await navigator.mediaDevices.getDisplayMedia({ 
+      video: true, 
+      audio: true, 
+      preferCurrentTab: true, 
+      selfBrowserSurface: 'include', 
+      surfaceSwitching: 'include' 
+    });
+    
+    chunks = [];
+    mediaRecorder = new MediaRecorder(stream, { 
+      mimeType: 'video/webm;codecs=vp9,opus' 
+    });
+    
+    // FIXED: Convert Blob to ArrayBuffer before sending
+    mediaRecorder.ondataavailable = async (e) => {
+      if (e.data && e.data.size > 0) {
+        chunks.push(e.data);
+        
+        try {
+          // Convert Blob to ArrayBuffer (Blobs can't be sent via chrome.runtime.sendMessage)
+          const arrayBuffer = await e.data.arrayBuffer();
+          
+          console.log('[RecorderOverlay] Sending chunk, size:', arrayBuffer.byteLength);
+          
+          // Send the ArrayBuffer to background script
+          chrome.runtime.sendMessage(
+            { 
+              type: 'UPLOAD_CHUNK', 
+              chunk: arrayBuffer 
+            },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                console.error('[RecorderOverlay] Error sending chunk:', chrome.runtime.lastError);
+              } else {
+                console.log('[RecorderOverlay] Chunk sent successfully:', response);
+              }
             }
-          }
-        };
-        mediaRecorder.onstop = handleStop;
-        mediaRecorder.start();
-        isRecording = true;
-        setRecording(true);
-      } catch (e) {
-        console.warn('[RecorderOverlay] Start failed', e);
-        strip.style.outline = '2px solid red';
-        label.textContent = 'Start failed: ' + (e.message || e);
+          );
+        } catch (err) {
+          console.error('[RecorderOverlay] Failed to process chunk:', err);
+        }
       }
-    }
+    };
+    
+    mediaRecorder.onstop = handleStop;
+    
+    // Start recording with timeslice for chunked recording
+    // Send a chunk every 1 second (1000ms)
+    mediaRecorder.start(1000);
+    
+    isRecording = true;
+    setRecording(true);
+  } catch (e) {
+    console.warn('[RecorderOverlay] Start failed', e);
+    strip.style.outline = '2px solid red';
+    label.textContent = 'Start failed: ' + (e.message || e);
+  }
+}
 
     function stop() {
       if (mediaRecorder && isRecording) mediaRecorder.stop();

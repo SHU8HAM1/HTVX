@@ -25,6 +25,7 @@ function testAddVideo(url) {
 
 // Also allow triggering via runtime message from UI or console: { type: 'TEST_ADD_VIDEO', url }
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    console.log('test_add_video')
     if (msg && msg.type === 'TEST_ADD_VIDEO') {
         try {
             testAddVideo(msg.url);
@@ -36,6 +37,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Forward modified chunks received via runtime messaging to the backend socket
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    console.log('modified_chunk')
     if (msg && msg.type === 'MODIFIED_CHUNK') {
         try {
             // Ensure socket is initialized
@@ -58,7 +60,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Handle direct upload messages from content scripts: { type: 'UPLOAD_CHUNK', chunk }
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    console.log('upload chunk')
     if (msg && msg.type === 'UPLOAD_CHUNK') {
+        console.log('upload chunk in if')
         (async () => {
             try {
                 if (!socket) initializeSocket();
@@ -87,6 +91,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // initialize socket connection; forwards events to content scripts in tabs
 const initializeSocket = (serverUrl = 'http://localhost:5000') => {
     try {
+        console.log('initializeSocket')
         if (typeof io === 'function') {
             socket = io(serverUrl);
             socket.on('connect', () => console.log('[ServiceWorker] socket connected'));
