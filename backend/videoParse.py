@@ -33,15 +33,3 @@ def upload_chunk(data):
     prompt_text = handle_chunk(filepath)
 
     emit('chunk_processed', {'status': 'ok', 'prompt': prompt_text})
-
-def upload_to_azure(file_bytes, file_name):
-    
-    blob_service_client = BlobServiceClient.from_connection_string(CONNECT_STR)
-    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-
-    blob_path = f"uploads/{file_name}"
-    blob_client = container_client.get_blob_client(blob_path)
-
-    blob_client.upload_blob(file_bytes, overwrite=True, content_settings={"content_type": "video/mp4"})
-
-    return f"https://{ACCOUNT_NAME}.blob.core.windows.net/{CONTAINER_NAME}/{blob_path}"
