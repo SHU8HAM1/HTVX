@@ -3,9 +3,9 @@
   "name": "React Chrome Extension",
   "version": "1.0.0",
   "description": "A simple React app as a Chrome extension",
-  "action": {"default_popup":"popup.html"},
-  "permissions": ["downloads", "tabs"],
+  "permissions": ["downloads", "tabs", "scripting", "tabCapture"],
   "host_permissions": ["<all_urls>"],
+  "action": { "default_title": "Screen Recorder" },
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -14,13 +14,6 @@
     {
       "resources": ["assets/*.css"],
       "matches": ["<all_urls>"]
-    }
-  ],
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["contentScript.js"],
-      "run_at": "document_idle"
     }
   ]
 }
