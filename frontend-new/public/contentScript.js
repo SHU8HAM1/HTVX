@@ -363,6 +363,90 @@
         cont.style.transform = 'translateX(-50%)';
       } catch (e) { /* ignore */ }
     }
+
+    // ---------------------- Socket.IO integration ----------------------
+    // Load socket.io client if needed and listen for 'video_uploaded' events.
+    function initSocketIO() {
+      const SOCKET_SERVER = window.__SOCKETIO_SERVER__ || 'http://localhost:5000';
+
+      console.log('[RecorderOverlay] initSocketIO to', SOCKET_SERVER);
+
+      function setupSocket() {
+        try {
+          console.log('[RecorderOverlay] attempting io() connect to', SOCKET_SERVER);
+          const socket = io(SOCKET_SERVER);
+          socket.on('connect', () => console.log('[RecorderOverlay] socket connected'));
+          socket.on('disconnect', () => console.log('[RecorderOverlay] socket disconnected'));
+          socket.on('video_uploaded', (data) => {
+            console.log('[RecorderOverlay] video_uploaded', data);
+            handleIncomingVideo(data);
+          });
+          // store for potential future use
+          window.__rec_socket = socket;
+        } catch (err) {
+          console.warn('[RecorderOverlay] socket setup failed', err);
+        }
+      }
+
+      // quick reachability test for the socket.io polling endpoint
+      async function checkServerAndLoad() {
+        const pingUrl = SOCKET_SERVER.replace(/\/$/, '') + '/socket.io/?EIO=4&transport=polling';
+        console.log('[RecorderOverlay] checking socket server reachability at', pingUrl);
+        let reachable = false;
+        try {
+          const resp = await fetch(pingUrl, { method: 'GET', mode: 'cors' });
+          console.log('[RecorderOverlay] socket server ping status', resp.status);
+          reachable = resp.ok || resp.status === 400 || resp.status === 200;
+        } catch (err) {
+          console.warn('[RecorderOverlay] socket server ping failed', err);
+        }
+
+        if (!window.io) {
+          // try to load CDN client regardless, but warn if server unreachable
+          const s = document.createElement('script');
+          s.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+          s.onload = () => {
+            console.log('[RecorderOverlay] loaded socket.io client from CDN');
+            if (!reachable) console.warn('[RecorderOverlay] server did not respond to ping; connection may still fail');
+            setupSocket();
+          };
+          s.onerror = () => console.warn('[RecorderOverlay] failed to load socket.io client from CDN (CSP?)');
+          document.head.appendChild(s);
+        } else {
+          if (!reachable) console.warn('[RecorderOverlay] server did not respond to ping; connection may still fail');
+          setupSocket();
+        }
+      }
+
+      checkServerAndLoad().catch((e)=>console.warn('[RecorderOverlay] checkServerAndLoad error', e));
+    }
+
+    function handleIncomingVideo(data) {
+      try {
+        const url = data && data.url;
+        if (!url) return;
+        const p = document.getElementById('rec-video-player') || playerContainer;
+        if (!p) return;
+
+        // If the player was hidden, make it visible
+        if (p.style.visibility === 'hidden' || getComputedStyle(p).display === 'none') {
+          p.style.visibility = 'visible';
+        }
+
+        // Add URL to playlist and navigate to it. addUrl will set the current index to the new one.
+        if (p.__player && typeof p.__player.addUrl === 'function') {
+          p.__player.addUrl(url);
+        } else {
+          // fallback: send a runtime message so other parts can handle it
+          try { chrome.runtime.sendMessage({ type: 'PLAYER_ADD_VIDEO', url }); } catch (e) { /* ignore */ }
+        }
+      } catch (e) {
+        console.warn('[RecorderOverlay] handleIncomingVideo error', e);
+      }
+    }
+
+    // initialize socket listener (best-effort)
+    try { initSocketIO(); } catch (e) { console.warn('[RecorderOverlay] initSocketIO failed', e); }
   } catch (err) {
     console.error('[RecorderOverlay] fatal init error', err);
   }

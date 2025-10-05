@@ -1,6 +1,6 @@
 from flask import Flask, request
-from flask_socketio import SocketIO, emit
-from azure.storage.blob import BlobServiceClient
+from flask_socketio import emit
+from socketio_instance import socketio
 from datetime import datetime
 import os
 from videoChunkHandler import handle_chunk
@@ -9,14 +9,32 @@ from videoChunkHandler import handle_chunk
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app, cors_allowed_origins="*") #enables CORS for frontend
+socketio.init_app(app)
+
+# store the latest uploaded video URL in memory (simple approach for dev)
+latest_video_url = None
+
+@app.route('/notify', methods=['POST'])
+def notify():
+    global latest_video_url
+    data = request.get_json(force=True)
+    url = data.get('url') if isinstance(data, dict) else None
+    if not url:
+        return ({'ok': False, 'message': 'missing url'}, 400)
+    latest_video_url = url
+    try:
+        socketio.emit('video_uploaded', {'url': url})
+    except Exception as e:
+        print('socketio emit error in /notify:', e)
+    return ({'ok': True}, 200)
+
+@app.route('/latest_video', methods=['GET'])
+def get_latest_video():
+    return ({'url': latest_video_url}, 200)
 
 UPLOAD_FOLDER = 'video_chunks'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-ACCOUNT_NAME = "Account_Name"
-CONNECT_STR = "DefaultEndpointsProtocol=https;AccountName=MY_ACCOUNT;AccountKey=MY_KEY;EndpointSuffix=core.windows.net"
-CONTAINER_NAME = 'videos'
 
 
 # get video link from frontend 
@@ -33,3 +51,10 @@ def upload_chunk(data):
     prompt_text = handle_chunk(filepath)
 
     emit('chunk_processed', {'status': 'ok', 'prompt': prompt_text})
+
+
+if __name__ == '__main__':
+    # Run the Socket.IO server for local development
+    port = int(os.environ.get('PORT', 5000))
+    # socketio.run will pick up the app via the shared instance
+    socketio.run(app, host='0.0.0.0', port=port)

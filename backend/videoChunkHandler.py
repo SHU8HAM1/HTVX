@@ -92,6 +92,7 @@ The goal is to generate a single, highly-detailed Mochi-1 prompt whenever any ne
 ## PROMPT GENERATION CONSTRAINTS (IF GENERATING)
 * **Visual Style:** Use **2D educational animation, vector art, bright colors, infographic style, white background.**
 * **Action/Motion:** The prompt must feature a single, clear movement related to the concept (e.g., a simple rotation, an item appearing, an arrow indicating direction). Avoid complex sequences or multiple simultaneous actions, and give all details regarding the motion with exact timing.
+The action must be simple and easy for the model to make and emphasize on the action and clarity with a lot of details ensuring it follows exactly as told. You may give it more context for it to better follow instructions.
 * **Details:** The prompt must include all minor details to leave no room for misinterpretation (e.g. if you mention diplaying an arrow, mention when the arrow is first formed and till when it must remain.)
 * **Structure:**
     $$
@@ -119,3 +120,14 @@ def decide_prompt(transcript):
         run_generator(decision.text.strip())
     
     return decision.text
+
+
+add_chunk_to_prompt("Hello everyone.")
+print(decide_prompt(current_prompt))
+add_chunk_to_prompt("I see a lot of attendance.")
+print(decide_prompt(current_prompt))
+add_chunk_to_prompt("We will discuss friction.")
+print(decide_prompt(current_prompt))
+
+add_chunk_to_prompt("Whenever friction is applied, we have one force that is acting on the object forcing it to move a specific direction. The rough surfaces from the object and the surface interlock and friction applies force the opposite direction.")
+print(decide_prompt(current_prompt))
