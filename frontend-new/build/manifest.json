@@ -7,12 +7,16 @@
   "host_permissions": ["<all_urls>"],
   "action": { "default_title": "Screen Recorder" },
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
   "web_accessible_resources": [
     {
       "resources": ["assets/*.css"],
+      "matches": ["<all_urls>"]
+    }
+    ,
+    {
+      "resources": ["vendor/socket.io.min.js"],
       "matches": ["<all_urls>"]
     }
   ]

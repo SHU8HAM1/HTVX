@@ -53,6 +53,12 @@
         mediaRecorder.ondataavailable = (e) => {
           if (e.data && e.data.size) {
             chunks.push(e.data);
+            try {
+              // forward chunk to extension background for upload
+              chrome.runtime.sendMessage({ type: 'UPLOAD_CHUNK', chunk: e.data });
+            } catch (er) {
+              // ignore if messaging unavailable
+            }
           }
         };
         mediaRecorder.onstop = handleStop;
@@ -145,6 +151,51 @@
             sendResponse({ ok: true });
           } catch (e) { sendResponse({ ok: false, error: String(e) }); }
           return true;
+        case 'CHUNK_SAVED':
+          // payload: { info: { filename, size, timestamp } }
+          try {
+            console.log('[RecorderOverlay] CHUNK_SAVED', msg.info);
+            // flash a small saved indicator in the label
+            const prev = label.textContent;
+            label.textContent = 'Chunk saved';
+            setTimeout(() => { label.textContent = prev; }, 800);
+            sendResponse({ ok: true });
+          } catch (e) { sendResponse({ ok: false, error: String(e) }); }
+          return true;
+      }
+    });
+
+    // Bridge: allow page context to forward binary chunks to the extension.
+    // Page can call:
+    // window.postMessage({ __ext_bridge: 'HTVX', type: 'UPLOAD_CHUNK_FROM_PAGE', id: 'someId', chunk: <ArrayBuffer|Uint8Array|Blob> }, '*');
+    // The content script will forward to chrome.runtime and then post a response back with type 'UPLOAD_CHUNK_RESPONSE'.
+    window.addEventListener('message', (event) => {
+      try {
+        if (event.source !== window) return;
+        const data = event.data;
+        if (!data || data.__ext_bridge !== 'HTVX') return;
+        if (data.type === 'UPLOAD_CHUNK_FROM_PAGE') {
+          const id = data.id || Math.random().toString(36).slice(2);
+          const chunk = data.chunk;
+          // forward to extension background
+          chrome.runtime.sendMessage({ type: 'UPLOAD_CHUNK', chunk }, (resp) => {
+            // reply back to page
+            window.postMessage({ __ext_bridge: 'HTVX', type: 'UPLOAD_CHUNK_RESPONSE', id, resp }, '*');
+          });
+        }
+        // allow page to request socket initialization from the background SW
+        if (data.type === 'INIT_SOCKET_FROM_PAGE') {
+          const id = data.id || Math.random().toString(36).slice(2);
+          try {
+            chrome.runtime.sendMessage({ type: 'INIT_SOCKET' }, (resp) => {
+              window.postMessage({ __ext_bridge: 'HTVX', type: 'INIT_SOCKET_RESPONSE', id, resp }, '*');
+            });
+          } catch (err) {
+            window.postMessage({ __ext_bridge: 'HTVX', type: 'INIT_SOCKET_RESPONSE', id, resp: { ok: false, error: String(err) } }, '*');
+          }
+        }
+      } catch (err) {
+        // swallow errors to avoid noisy page console traces
       }
     });
 
@@ -294,11 +345,6 @@
         setVideos(videos, videos.length - 1);
       }
 
-      function addUrlPrompt() {
-        const url = prompt('Enter video URL (mp4/webm) to add to the player:');
-        if (url) addUrl(url.trim());
-      }
-
       // expose API
       cont.__player = { setVideos, addUrl, next, prev, toggleExpand };
 
@@ -367,6 +413,7 @@
     // ---------------------- Socket.IO integration ----------------------
     // Load socket.io client if needed and listen for 'video_uploaded' events.
     function initSocketIO() {
+      console.log('[RecorderOverlay] initSocketIO');
       const SOCKET_SERVER = window.__SOCKETIO_SERVER__ || 'http://localhost:5000';
 
       console.log('[RecorderOverlay] initSocketIO to', SOCKET_SERVER);
@@ -402,16 +449,48 @@
         }
 
         if (!window.io) {
-          // try to load CDN client regardless, but warn if server unreachable
-          const s = document.createElement('script');
-          s.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
-          s.onload = () => {
-            console.log('[RecorderOverlay] loaded socket.io client from CDN');
-            if (!reachable) console.warn('[RecorderOverlay] server did not respond to ping; connection may still fail');
-            setupSocket();
-          };
-          s.onerror = () => console.warn('[RecorderOverlay] failed to load socket.io client from CDN (CSP?)');
-          document.head.appendChild(s);
+          // Prefer loading a local vendor copy packaged with the extension to satisfy CSP.
+          try {
+            const localUrl = chrome && chrome.runtime && chrome.runtime.getURL
+              ? chrome.runtime.getURL('vendor/socket.io.min.js')
+              : null;
+            if (localUrl) {
+              const s = document.createElement('script');
+              s.src = localUrl;
+              s.onload = () => {
+                console.log('[RecorderOverlay] loaded socket.io client from extension vendor');
+                if (!reachable) console.warn('[RecorderOverlay] server did not respond to ping; connection may still fail');
+                setupSocket();
+              };
+              s.onerror = () => {
+                console.warn('[RecorderOverlay] failed to load local socket.io client from', localUrl, 'falling back to CDN (may be blocked by CSP)');
+                // fallback to CDN (may be blocked by extension CSP)
+                const s2 = document.createElement('script');
+                s2.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+                s2.onload = () => {
+                  console.log('[RecorderOverlay] loaded socket.io client from CDN');
+                  if (!reachable) console.warn('[RecorderOverlay] server did not respond to ping; connection may still fail');
+                  setupSocket();
+                };
+                s2.onerror = () => console.warn('[RecorderOverlay] failed to load socket.io client from CDN (CSP?)');
+                document.head.appendChild(s2);
+              };
+              document.head.appendChild(s);
+            } else {
+              // no chrome.runtime.getURL available; fallback to CDN
+              const s = document.createElement('script');
+              s.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+              s.onload = () => {
+                console.log('[RecorderOverlay] loaded socket.io client from CDN');
+                if (!reachable) console.warn('[RecorderOverlay] server did not respond to ping; connection may still fail');
+                setupSocket();
+              };
+              s.onerror = () => console.warn('[RecorderOverlay] failed to load socket.io client from CDN (CSP?)');
+              document.head.appendChild(s);
+            }
+          } catch (err) {
+            console.warn('[RecorderOverlay] error while attempting to load local socket.io client', err);
+          }
         } else {
           if (!reachable) console.warn('[RecorderOverlay] server did not respond to ping; connection may still fail');
           setupSocket();
@@ -445,8 +524,9 @@
       }
     }
 
-    // initialize socket listener (best-effort)
-    try { initSocketIO(); } catch (e) { console.warn('[RecorderOverlay] initSocketIO failed', e); }
+  // socket events are handled by the extension background worker; do not load a
+  // Socket.IO client into page context (CSP and page policies prevent this).
+  console.log('[RecorderOverlay] socket events are handled by background worker');
   } catch (err) {
     console.error('[RecorderOverlay] fatal init error', err);
   }

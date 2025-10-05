@@ -120,14 +120,3 @@ def decide_prompt(transcript):
         run_generator(decision.text.strip())
     
     return decision.text
-
-
-add_chunk_to_prompt("Hello everyone.")
-print(decide_prompt(current_prompt))
-add_chunk_to_prompt("I see a lot of attendance.")
-print(decide_prompt(current_prompt))
-add_chunk_to_prompt("We will discuss friction.")
-print(decide_prompt(current_prompt))
-
-add_chunk_to_prompt("Whenever friction is applied, we have one force that is acting on the object forcing it to move a specific direction. The rough surfaces from the object and the surface interlock and friction applies force the opposite direction.")
-print(decide_prompt(current_prompt))

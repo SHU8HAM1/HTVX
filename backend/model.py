@@ -12,18 +12,18 @@ load_dotenv()
 
 def run_generator(prompt):
 
-    # client = InferenceClient(
-    #     provider="auto",
-    #     api_key=os.environ.get("HF_TOKEN"),
-    # )
-    # video = client.text_to_video(
-    #     prompt,
-    #     model="genmo/mochi-1-preview",
-    # )
+    client = InferenceClient(
+        provider="auto",
+        api_key=os.environ.get("HF_TOKEN"),
+    )
+    video = client.text_to_video(
+        prompt,
+        model="genmo/mochi-1-preview",
+    )
 
 
 
-    # random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=18))
+    random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=18))
 
     upload_video("adfsjskd",  "fasdj.webm")
 
@@ -42,33 +42,33 @@ def upload_video(file_bytes, file_name):
         dict: { 'success': bool, 'message': str, 'public_url': Optional[str] }
     """
 
-    # url = os.environ.get('SUPABASE_URL')
-    # key = os.environ.get('SUPABASE_KEY')
-    # if not url or not key:
-    #     return { 'success': False, 'message': 'SUPABASE_URL or SUPABASE_KEY not set in environment', 'public_url': None }
+    url = os.environ.get('SUPABASE_URL')
+    key = os.environ.get('SUPABASE_KEY')
+    if not url or not key:
+        return { 'success': False, 'message': 'SUPABASE_URL or SUPABASE_KEY not set in environment', 'public_url': None }
 
-    # supabase = create_client(url, key)
+    supabase = create_client(url, key)
 
-    # bucket = 'abc'
+    bucket = 'abc'
 
     try:
         # upload expects a file-like or bytes
-        # res = supabase.storage.from_(bucket).upload(file_name, file_bytes)
-        # print('Upload response:', res)
-        # if isinstance(res, dict) and res.get('error'):
-        #     return { 'success': False, 'message': str(res.get('error')), 'public_url': None }
+        res = supabase.storage.from_(bucket).upload(file_name, file_bytes)
+        print('Upload response:', res)
+        if isinstance(res, dict) and res.get('error'):
+            return { 'success': False, 'message': str(res.get('error')), 'public_url': None }
 
         # Try to get public URL in a robust way
-        # public_url = None
-        # try:
-        #     pub = supabase.storage.from_(bucket).get_public_url(file_name)
-        #     if isinstance(pub, dict):
-        #         public_url = pub.get('publicURL') or pub.get('public_url') or pub.get('publicUrl')
-        #     else:
-        #         # some clients return a plain string or object with __str__
-        #         public_url = str(pub)
-        # except Exception:
-        #     public_url = f"{url.rstrip('/')}/storage/v1/object/public/{bucket}/{file_name}"
+        public_url = None
+        try:
+            pub = supabase.storage.from_(bucket).get_public_url(file_name)
+            if isinstance(pub, dict):
+                public_url = pub.get('publicURL') or pub.get('public_url') or pub.get('publicUrl')
+            else:
+                # some clients return a plain string or object with __str__
+                public_url = str(pub)
+        except Exception:
+            public_url = f"{url.rstrip('/')}/storage/v1/object/public/{bucket}/{file_name}"
 
         # Emit Socket.IO notification (best-effort) using python-socketio client
         try:
