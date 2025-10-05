@@ -12,12 +12,15 @@
     injectStyles();
 
     // -------------------------- DOM Elements -------------------- //
-    const strip = createStrip();
-    const dragHandle = strip.querySelector('.drag');
+  const strip = createStrip();
+  const dragHandle = strip.querySelector('.drag');
     const label = strip.querySelector('.label');
     const startBtn = strip.querySelector('button.start');
     const stopBtn = strip.querySelector('button.stop');
     const hideBtn = strip.querySelector('button.hide');
+
+  // create video player and position it under the strip
+  const playerContainer = createPlayer();
 
     // -------------------------- State --------------------------- //
     let mediaRecorder = null;
@@ -122,8 +125,25 @@
           return true;
         case 'REC_HIDE':
           strip.style.visibility = 'hidden';
+          playerContainer.style.visibility = 'hidden';
           window.__recordingStripInjected = false;
           sendResponse(currentState());
+          return true;
+        case 'PLAYER_SET_VIDEOS':
+          // payload: { urls: string[], start: number }
+          try {
+            const p = document.getElementById('rec-video-player');
+            if (p && p.__player) p.__player.setVideos(msg.urls || [], msg.start || 0);
+            sendResponse({ ok: true });
+          } catch (e) { sendResponse({ ok: false, error: String(e) }); }
+          return true;
+        case 'PLAYER_ADD_VIDEO':
+          // payload: { url: string }
+          try {
+            const p = document.getElementById('rec-video-player');
+            if (p && p.__player) p.__player.addUrl(msg.url);
+            sendResponse({ ok: true });
+          } catch (e) { sendResponse({ ok: false, error: String(e) }); }
           return true;
       }
     });
@@ -156,6 +176,22 @@
         #recording-strip-overlay:not(.recording) { box-shadow:0 4px 20px -4px rgba(0,0,0,0.35),0 0 0 1px rgba(255,255,255,0.25); }
         #recording-strip-overlay .label { user-select:none; font-weight:600; font-size:12.5px; letter-spacing:.3px; }
         #recording-strip-overlay .hidden { display:none !important; }
+        /* --- Mini glass video player --- */
+        #rec-video-player { position:fixed; z-index:2147483646; left:50%; transform:translateX(-50%); top:80px; width:240px; height:135px; border-radius:12px; overflow:hidden; backdrop-filter:blur(10px) saturate(140%); -webkit-backdrop-filter:blur(10px) saturate(140%); background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); box-shadow:0 6px 18px rgba(0,0,0,0.28); transition:width .22s ease,height .22s ease,transform .18s ease,opacity .18s; display:flex; align-items:center; justify-content:center; }
+        @media (prefers-color-scheme:dark){ #rec-video-player { background:rgba(18,18,22,0.36); border-color:rgba(120,120,140,0.08); } }
+        #rec-video-player.expanded { width:480px; height:270px; }
+        #rec-video-player .player-inner { width:100%; height:100%; position:relative; }
+        #rec-video-player video { width:100%; height:100%; object-fit:cover; display:block; background:transparent; }
+        #rec-video-player .controls { position:absolute; left:0; right:0; bottom:8px; display:flex; justify-content:center; gap:8px; pointer-events:auto; }
+        #rec-video-player .dot { width:8px; height:8px; border-radius:999px; background:rgba(255,255,255,0.4); opacity:0.9; transition:transform .15s, background .12s; }
+        #rec-video-player .dot.active { transform:scale(1.25); background:rgba(255,255,255,0.95); }
+        #rec-video-player .arrow { position:absolute; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.28); color:#fff; border-radius:999px; width:30px; height:30px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+        #rec-video-player .arrow.left { left:8px; }
+        #rec-video-player .arrow.right { right:8px; }
+        #rec-video-player .top-right { position:absolute; top:6px; right:6px; display:flex; gap:6px; }
+        #rec-video-player button.small { background:rgba(255,255,255,0.06); color:#fff; border:none; width:28px; height:28px; border-radius:6px; cursor:pointer; }
+        #rec-video-player .meta { position:absolute; left:8px; top:8px; color:rgba(255,255,255,0.9); font-size:11px; font-weight:600; text-shadow:0 1px 0 rgba(0,0,0,0.6); }
+        #rec-video-player .hidden { display:none !important; }
       `;
       document.documentElement.appendChild(style);
     }
@@ -173,6 +209,103 @@
       `;
       document.documentElement.appendChild(strip);
       return strip;
+    }
+
+    function createPlayer() {
+      const cont = document.createElement('div');
+      cont.id = 'rec-video-player';
+      cont.innerHTML = `
+        <div class="player-inner">
+          <video playsinline webkit-playsinline controls></video>
+          <div class="arrow left" title="Previous">‹</div>
+          <div class="arrow right" title="Next">›</div>
+          <div class="top-right">
+            <button class="small btn-expand" title="Expand">⤢</button>
+          </div>
+          <div class="meta hidden">0 / 0</div>
+          <div class="controls"></div>
+        </div>
+      `;
+      document.documentElement.appendChild(cont);
+
+      // state
+      const video = cont.querySelector('video');
+      const left = cont.querySelector('.arrow.left');
+      const right = cont.querySelector('.arrow.right');
+      const dotsWrap = cont.querySelector('.controls');
+      const meta = cont.querySelector('.meta');
+      const btnExpand = cont.querySelector('.btn-expand');
+      // const btnAdd = cont.querySelector('.btn-add');
+
+      let videos = [/* default empty; can be set via messages */];
+      let idx = 0;
+      let isExpanded = false;
+
+      cont.style.visibility = 'hidden';
+
+      function renderDots() {
+        dotsWrap.innerHTML = '';
+        videos.forEach((v, i) => {
+          const s = document.createElement('span');
+          s.className = 'dot' + (i === idx ? ' active' : '');
+          s.title = v;
+          s.addEventListener('click', () => showVideoAt(i));
+          dotsWrap.appendChild(s);
+        });
+        meta.textContent = (videos.length ? (idx + 1) + ' / ' + videos.length : '0 / 0');
+        meta.classList.toggle('hidden', videos.length === 0);
+      }
+
+      function showVideoAt(i) {
+        if (!videos.length) return;
+        idx = (i + videos.length) % videos.length;
+        // smooth fade
+        cont.style.opacity = '0.85';
+        setTimeout(() => {
+          video.src = videos[idx];
+          try { video.play().catch(()=>{}); } catch(e){}
+          renderDots();
+          cont.style.opacity = '1';
+        }, 140);
+      }
+
+      function next() { if (!videos.length) return; showVideoAt(idx + 1); }
+      function prev() { if (!videos.length) return; showVideoAt(idx - 1); }
+
+      left.addEventListener('click', prev);
+      right.addEventListener('click', next);
+      btnExpand.addEventListener('click', () => toggleExpand());
+      // btnAdd.addEventListener('click', () => addUrlPrompt());
+
+      video.addEventListener('ended', () => { next(); });
+
+      function toggleExpand() { isExpanded = !isExpanded; cont.classList.toggle('expanded', isExpanded); }
+
+      function setVideos(arr, startIndex = 0) {
+        videos = Array.isArray(arr) ? arr.slice() : [];
+        idx = Math.max(0, Math.min(startIndex, videos.length - 1));
+        renderDots();
+        if (videos.length) showVideoAt(idx);
+      }
+
+      function addUrl(url) {
+        if (!url) return;
+        videos.push(url);
+        setVideos(videos, videos.length - 1);
+      }
+
+      function addUrlPrompt() {
+        const url = prompt('Enter video URL (mp4/webm) to add to the player:');
+        if (url) addUrl(url.trim());
+      }
+
+      // expose API
+      cont.__player = { setVideos, addUrl, next, prev, toggleExpand };
+
+      // initial render
+      renderDots();
+      updatePlayerPosition();
+      return cont;
     }
 
     function enableDrag(container, handle) {
@@ -193,12 +326,42 @@
         container.style.left = e.clientX - ox + 'px';
         container.style.top = e.clientY - oy + 'px';
         container.style.transform = 'translateX(0)';
+        // reposition player under the strip while dragging
+        try { updatePlayerPosition(); } catch (er) { /* ignore */ }
       }
       function up() {
         dragging = false;
         document.removeEventListener('mousemove', move);
         document.removeEventListener('mouseup', up);
       }
+    }
+
+    // basic keyboard shortcuts when the player is visible: left/right arrows to navigate, +/- to expand
+    window.addEventListener('keydown', (e) => {
+      const p = document.getElementById('rec-video-player');
+      if (!p) return;
+      if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+      const player = p.__player;
+      if (!player) return;
+      if (e.key === 'ArrowRight') { player.next(); }
+      if (e.key === 'ArrowLeft') { player.prev(); }
+      if (e.key === '+' || e.key === '=') { player.toggleExpand(); }
+    });
+
+    function updatePlayerPosition() {
+      try {
+        const cont = document.getElementById('rec-video-player');
+        const strip = document.getElementById('recording-strip-overlay');
+        if (!cont || !strip) return;
+        const r = strip.getBoundingClientRect();
+        // position player centered under the strip, with a small gap
+        const top = window.scrollY + r.top + r.height + 8;
+        cont.style.top = top + 'px';
+        // keep horizontally centered to strip
+        const center = r.left + r.width / 2 + window.scrollX;
+        cont.style.left = center + 'px';
+        cont.style.transform = 'translateX(-50%)';
+      } catch (e) { /* ignore */ }
     }
   } catch (err) {
     console.error('[RecorderOverlay] fatal init error', err);
